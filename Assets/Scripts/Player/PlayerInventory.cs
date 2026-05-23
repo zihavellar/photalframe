@@ -2,8 +2,6 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using PhotalFrame.Input;
-using System;
-using PhotalFrame.Input;
 
 namespace PhotalFrame.Player
 {
@@ -243,13 +241,28 @@ private int virginTapeCount;
         return collectedItemIds.Contains(itemId);
     }
 
+    public void SetFilmType61Count(int count)
+    {
+        type61Count = count;
+    }
+
+    public void SetFilmType90Count(int count)
+    {
+        type90Count = count;
+    }
+
+    public void SetHerbalMedicineCount(int count)
+    {
+        herbalMedicineCount = count;
+    }
+
     public void AddKeyItem(string itemId)
     {
         Debug.Log($"Key item collected: {itemId}");
         OnInventoryChanged?.Invoke();
     }
 
-        public void SetVirginTapeState(int count)
+    public void SetVirginTapeState(int count)
     {
         virginTapeCount = count;
     }

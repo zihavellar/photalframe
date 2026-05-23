@@ -18,6 +18,7 @@ namespace PhotalFrame.Player
         [Header("Item Settings")]
         [SerializeField] private CollectibleType itemType;
         [SerializeField] private int quantity = 1;
+        [SerializeField] private string itemId = "";
 
         [Header("Animation Settings")]
         [SerializeField] private float bobSpeed = 2f;
@@ -28,12 +29,21 @@ namespace PhotalFrame.Player
         private SphereCollider triggerCollider;
         private bool isCollected = false;
 
+        public string ItemId { get => itemId; set => itemId = value; }
+
         private void Start()
         {
             startPosition = transform.position;
             triggerCollider = GetComponent<SphereCollider>();
             triggerCollider.isTrigger = true;
             triggerCollider.radius = 1.0f; // Large enough detection radius
+
+            // Check if this item was already collected in a previous session
+            PlayerInventory inv = FindAnyObjectByType<PlayerInventory>();
+            if (!string.IsNullOrEmpty(itemId) && inv != null && inv.WasItemCollected(itemId))
+            {
+                Destroy(gameObject);
+            }
         }
 
         private void Update()
@@ -56,9 +66,16 @@ namespace PhotalFrame.Player
                 if (inventory != null)
                 {
                     isCollected = true;
+
+                    // Register persistent item ID to prevent re-collection after load
+                    if (!string.IsNullOrEmpty(itemId))
+                    {
+                        inventory.RegisterCollectedItem(itemId);
+                    }
+
                     DeliverItem(inventory);
                     SpawnPickupText();
-                    Destroy(gameObject, 0.05f); // Destroy pickup object
+                    Destroy(gameObject, 0.05f);
                 }
             }
         }

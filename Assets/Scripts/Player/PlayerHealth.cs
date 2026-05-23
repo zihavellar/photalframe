@@ -28,6 +28,13 @@ namespace PhotalFrame.Player
         private void Awake()
         {
             currentHealth = maxHealth;
+            Time.timeScale = 1f;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ResetTimeScale()
+        {
+            Time.timeScale = 1f;
         }
 
         private void Start()
@@ -40,9 +47,26 @@ namespace PhotalFrame.Player
 
         private void Update()
         {
+            // Dev kill: O+P triggers game over
+            if (Keyboard.current != null &&
+                Keyboard.current.oKey.isPressed &&
+                Keyboard.current.pKey.wasPressedThisFrame)
+            {
+                if (!isDead) Die();
+            }
+
             if (isDead)
             {
-                // Restart scene on R press when dead
+                // Q to load from save
+                if (Keyboard.current != null && Keyboard.current.qKey.wasPressedThisFrame)
+                {
+                    if (SaveSystem.SaveExists())
+                    {
+                        SaveSystem.ShouldLoadOnStart = true;
+                    }
+                    RestartScene();
+                }
+                // R to restart fresh
                 if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
                 {
                     RestartScene();
@@ -189,6 +213,9 @@ namespace PhotalFrame.Player
             {
                 inventory.SetVirginTapeState(data.virginTapeCount);
                 inventory.SetCollectedItems(data.collectedItemIds);
+                inventory.SetFilmType61Count(data.filmType61Count);
+                inventory.SetFilmType90Count(data.filmType90Count);
+                inventory.SetHerbalMedicineCount(data.herbalMedicineCount);
             }
 
             // Handle ghost defeated state

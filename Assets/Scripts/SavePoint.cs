@@ -1,6 +1,8 @@
 using UnityEngine;
 using PhotalFrame.Player;
 using PhotalFrame.Input;
+using PhotalFrame.UI;
+using PhotalFrame.Ghost;
 
 namespace PhotalFrame.World
 {
@@ -11,6 +13,7 @@ namespace PhotalFrame.World
 
         [Header("References")]
         [SerializeField] private InputReader inputReader;
+        [SerializeField] private SaveMenuUI saveMenuUI;
 
         private Transform playerTransform;
         private PlayerHealth playerHealth;
@@ -22,6 +25,9 @@ namespace PhotalFrame.World
         {
             if (inputReader == null)
                 inputReader = FindAnyObjectByType<InputReader>();
+
+            if (saveMenuUI == null)
+                saveMenuUI = FindAnyObjectByType<SaveMenuUI>();
 
             GameObject player = GameObject.FindWithTag("Player");
             if (player != null)
@@ -41,7 +47,7 @@ namespace PhotalFrame.World
             float distance = Vector3.Distance(transform.position, playerTransform.position);
             isPlayerInRange = distance <= activationRadius && !playerHealth.IsDead;
 
-            if (isPlayerInRange && inputReader.Interact)
+            if (isPlayerInRange && inputReader.Interact && !saveMenuUI.IsOpen)
             {
                 TrySave();
             }
@@ -49,15 +55,10 @@ namespace PhotalFrame.World
 
         private void TrySave()
         {
-            // Consume a Virgin Tape to save
-            if (playerInventory != null && playerInventory.ConsumeVirginTape())
+            // Show confirmation pop-up instead of saving directly
+            if (saveMenuUI != null)
             {
-                PerformSave();
-                Debug.Log("Save successful! Consumed 1 Virgin Tape.");
-            }
-            else
-            {
-                Debug.Log("No Virgin Tape to save! Find a Virgin Tape item first.");
+                saveMenuUI.OpenSavePrompt(this);
             }
         }
 
@@ -111,8 +112,12 @@ namespace PhotalFrame.World
             GameObject ghost = GameObject.Find("Ghost_Test");
             if (ghost != null)
             {
-                Ghost.GhostTarget ghostTarget = ghost.GetComponent<Ghost.GhostTarget>();
+                GhostTarget ghostTarget = ghost.GetComponent<GhostTarget>();
                 data.ghostTestDefeated = ghostTarget == null || ghostTarget.CurrentHealth <= 0 || !ghost.activeInHierarchy;
+            }
+            else
+            {
+                data.ghostTestDefeated = true;
             }
 
             Save.SaveSystem.Save(data);

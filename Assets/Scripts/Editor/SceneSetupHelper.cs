@@ -778,7 +778,7 @@ namespace PhotalFrame.Editor
                 Text subText = subGo.AddComponent<Text>();
                 subText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 if (subText.font == null) subText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                subText.text = "Pressione R para Reiniciar";
+                subText.text = "Q: Carregar Save  |  R: Reiniciar";
                 subText.fontSize = 20;
                 subText.alignment = TextAnchor.MiddleCenter;
                 subText.color = Color.white;
@@ -1260,6 +1260,142 @@ namespace PhotalFrame.Editor
             {
                 CreateCollectible(new Vector3(0f, 0.5f, 5.5f), CollectibleType.VirginTape, 1, "Collectible_VirginTape2");
             }
+
+            // 16. Setup Save Menu UI Pop-up Panel under Canvas
+            Transform saveMenuTrans = canvasGo.transform.Find("SaveMenuPanel");
+            GameObject saveMenuPanel;
+            Text savePromptText = null;
+            Button confirmBtn = null, cancelBtn = null;
+
+            if (saveMenuTrans == null)
+            {
+                saveMenuPanel = new GameObject("SaveMenuPanel");
+                saveMenuPanel.transform.SetParent(canvasGo.transform, false);
+
+                RectTransform panelRect = saveMenuPanel.AddComponent<RectTransform>();
+                panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+                panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+                panelRect.pivot = new Vector2(0.5f, 0.5f);
+                panelRect.sizeDelta = new Vector2(350f, 200f);
+
+                Image panelBg = saveMenuPanel.AddComponent<Image>();
+                panelBg.color = new Color(0.05f, 0.05f, 0.1f, 0.92f);
+
+                // Prompt text
+                GameObject promptGo = new GameObject("PromptText");
+                promptGo.transform.SetParent(saveMenuPanel.transform, false);
+                RectTransform promptRect = promptGo.AddComponent<RectTransform>();
+                promptRect.anchorMin = new Vector2(0.5f, 0.7f);
+                promptRect.anchorMax = new Vector2(0.5f, 0.7f);
+                promptRect.pivot = new Vector2(0.5f, 0.5f);
+                promptRect.sizeDelta = new Vector2(300f, 60f);
+
+                savePromptText = promptGo.AddComponent<Text>();
+                savePromptText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (savePromptText.font == null) savePromptText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                savePromptText.text = "Save game?\n(Consumes 1 Virgin Tape)";
+                savePromptText.fontSize = 16;
+                savePromptText.fontStyle = FontStyle.Bold;
+                savePromptText.alignment = TextAnchor.MiddleCenter;
+                savePromptText.color = Color.white;
+                promptGo.AddComponent<Shadow>().effectColor = Color.black;
+
+                // Confirm button
+                GameObject confirmGo = new GameObject("ConfirmButton");
+                confirmGo.transform.SetParent(saveMenuPanel.transform, false);
+                RectTransform confirmRect = confirmGo.AddComponent<RectTransform>();
+                confirmRect.anchorMin = new Vector2(0.5f, 0.35f);
+                confirmRect.anchorMax = new Vector2(0.5f, 0.35f);
+                confirmRect.pivot = new Vector2(0.5f, 0.5f);
+                confirmRect.anchoredPosition = new Vector3(-70f, 0f, 0f);
+                confirmRect.sizeDelta = new Vector2(120f, 40f);
+
+                Image confirmImg = confirmGo.AddComponent<Image>();
+                confirmImg.color = new Color(0.2f, 0.6f, 0.2f, 0.8f);
+                confirmBtn = confirmGo.AddComponent<Button>();
+                confirmBtn.targetGraphic = confirmImg;
+
+                GameObject confirmText = new GameObject("Text");
+                confirmText.transform.SetParent(confirmGo.transform, false);
+                RectTransform ctRect = confirmText.AddComponent<RectTransform>();
+                ctRect.anchorMin = Vector2.zero;
+                ctRect.anchorMax = Vector2.one;
+                ctRect.sizeDelta = Vector2.zero;
+                Text ct = confirmText.AddComponent<Text>();
+                ct.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (ct.font == null) ct.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                ct.text = "CONFIRMAR";
+                ct.fontSize = 16;
+                ct.fontStyle = FontStyle.Bold;
+                ct.alignment = TextAnchor.MiddleCenter;
+                ct.color = Color.white;
+
+                // Cancel button
+                GameObject cancelGo = new GameObject("CancelButton");
+                cancelGo.transform.SetParent(saveMenuPanel.transform, false);
+                RectTransform cancelRect = cancelGo.AddComponent<RectTransform>();
+                cancelRect.anchorMin = new Vector2(0.5f, 0.35f);
+                cancelRect.anchorMax = new Vector2(0.5f, 0.35f);
+                cancelRect.pivot = new Vector2(0.5f, 0.5f);
+                cancelRect.anchoredPosition = new Vector3(70f, 0f, 0f);
+                cancelRect.sizeDelta = new Vector2(120f, 40f);
+
+                Image cancelImg = cancelGo.AddComponent<Image>();
+                cancelImg.color = new Color(0.6f, 0.2f, 0.2f, 0.8f);
+                cancelBtn = cancelGo.AddComponent<Button>();
+                cancelBtn.targetGraphic = cancelImg;
+
+                GameObject cancelText = new GameObject("Text");
+                cancelText.transform.SetParent(cancelGo.transform, false);
+                RectTransform ccRect = cancelText.AddComponent<RectTransform>();
+                ccRect.anchorMin = Vector2.zero;
+                ccRect.anchorMax = Vector2.one;
+                ccRect.sizeDelta = Vector2.zero;
+                Text cct = cancelText.AddComponent<Text>();
+                cct.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (cct.font == null) cct.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                cct.text = "CANCELAR";
+                cct.fontSize = 16;
+                cct.fontStyle = FontStyle.Bold;
+                cct.alignment = TextAnchor.MiddleCenter;
+                cct.color = Color.white;
+
+                saveMenuPanel.SetActive(false);
+            }
+            else
+            {
+                saveMenuPanel = saveMenuTrans.gameObject;
+                savePromptText = saveMenuPanel.transform.Find("PromptText")?.GetComponent<Text>();
+                Transform confirmT = saveMenuPanel.transform.Find("ConfirmButton");
+                if (confirmT != null) confirmBtn = confirmT.GetComponent<Button>();
+                Transform cancelT = saveMenuPanel.transform.Find("CancelButton");
+                if (cancelT != null) cancelBtn = cancelT.GetComponent<Button>();
+            }
+
+            // Always ensure SaveMenuUI exists and references are linked
+            SaveMenuUI saveMenuUI = canvasGo.GetComponent<SaveMenuUI>();
+            if (saveMenuUI == null)
+            {
+                saveMenuUI = canvasGo.AddComponent<SaveMenuUI>();
+            }
+
+            SerializedObject soSaveUI = new SerializedObject(saveMenuUI);
+            soSaveUI.FindProperty("savePanel").objectReferenceValue = saveMenuPanel;
+            soSaveUI.FindProperty("savePromptText").objectReferenceValue = savePromptText;
+            soSaveUI.FindProperty("confirmButton").objectReferenceValue = confirmBtn;
+            soSaveUI.FindProperty("cancelButton").objectReferenceValue = cancelBtn;
+            soSaveUI.FindProperty("inputReader").objectReferenceValue = inputReader;
+            soSaveUI.FindProperty("playerInventory").objectReferenceValue = playerInventory;
+            soSaveUI.ApplyModifiedProperties();
+
+            // Link SavePoint to SaveMenuUI
+            if (savePoint != null)
+            {
+                SerializedObject soSP = new SerializedObject(spScript);
+                soSP.FindProperty("saveMenuUI").objectReferenceValue = saveMenuUI;
+                soSP.ApplyModifiedProperties();
+            }
+
             Debug.Log("Photal Frame: Setup concluído com sucesso! A cena foi configurada e salva.");
         }
 
@@ -1390,6 +1526,7 @@ namespace PhotalFrame.Editor
             SerializedObject soCol = new SerializedObject(collectible);
             soCol.FindProperty("itemType").enumValueIndex = (int)type;
             soCol.FindProperty("quantity").intValue = qty;
+            soCol.FindProperty("itemId").stringValue = name; // Use object name as unique persistent ID
             soCol.ApplyModifiedProperties();
 
             Material itemMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/CollectibleMaterial.mat");

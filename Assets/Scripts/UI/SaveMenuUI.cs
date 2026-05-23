@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using PhotalFrame.Player;
 using PhotalFrame.Input;
 
@@ -14,9 +15,14 @@ namespace PhotalFrame.UI
         [SerializeField] private Button cancelButton;
         [SerializeField] private InputReader inputReader;
         [SerializeField] private PlayerInventory playerInventory;
-        [SerializeField] private World.SavePoint savePoint;
 
+        private World.SavePoint currentSavePoint;
         private bool isOpen = false;
+        private bool isCountingDown = false;
+        private int countdownValue = 3;
+        private float countdownTimer = 0f;
+
+        public bool IsOpen => isOpen;
 
         private void Start()
         {
@@ -25,9 +31,6 @@ namespace PhotalFrame.UI
 
             if (playerInventory == null)
                 playerInventory = FindAnyObjectByType<PlayerInventory>();
-
-            if (savePoint == null)
-                savePoint = FindAnyObjectByType<World.SavePoint>();
 
             if (savePanel != null)
                 savePanel.SetActive(false);
@@ -41,28 +44,40 @@ namespace PhotalFrame.UI
 
         private void Update()
         {
-            if (inputReader == null) return;
-
-            // Hook into save point interaction via Interact key
-            // SavePoint handles this directly now, but this UI can be shown by it
-            if (isOpen)
+            if (isOpen && !isCountingDown)
             {
-                if (inputReader.Interact)
+                if (Keyboard.current != null)
                 {
-                    CancelSave();
+                    if (Keyboard.current.escapeKey.wasPressedThisFrame)
+                        CancelSave();
+                    if (Keyboard.current.yKey.wasPressedThisFrame)
+                        ConfirmSave();
+                }
+            }
+
+            if (isCountingDown)
+            {
+                countdownTimer += Time.unscaledDeltaTime;
+                int display = Mathf.Max(0, countdownValue - Mathf.FloorToInt(countdownTimer));
+                if (savePromptText != null)
+                    savePromptText.text = $"Saved!  {display}";
+
+                if (countdownTimer >= countdownValue)
+                {
+                    CloseSavePrompt();
                 }
             }
         }
 
-        public void OpenSavePrompt()
+        public void OpenSavePrompt(World.SavePoint savePoint)
         {
             if (isOpen) return;
 
+            currentSavePoint = savePoint;
             isOpen = true;
             if (savePanel != null)
                 savePanel.SetActive(true);
 
-            // Pause the game
             Time.timeScale = 0f;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -71,8 +86,8 @@ namespace PhotalFrame.UI
             {
                 bool hasTape = playerInventory != null && playerInventory.VirginTapeCount > 0;
                 savePromptText.text = hasTape ?
-                    $"Save game? (Consumes 1 Virgin Tape - {playerInventory.VirginTapeCount} left)" :
-                    "No Virgin Tape! Find one to save.";
+                    $"Save game? (Consumes 1 Virgin Tape - {playerInventory.VirginTapeCount} left)\nESC to cancel" :
+                    "No Virgin Tape! Find one to save.\nESC to cancel";
             }
 
             if (confirmButton != null)
@@ -81,25 +96,43 @@ namespace PhotalFrame.UI
 
         public void ConfirmSave()
         {
-            if (savePoint != null && playerInventory != null && playerInventory.VirginTapeCount > 0)
+            if (currentSavePoint != null && playerInventory != null && playerInventory.VirginTapeCount > 0 && playerInventory.ConsumeVirginTape())
             {
-                savePoint.PerformSave();
-                CloseSavePrompt();
+                currentSavePoint.PerformSave();
+                StartCountdown();
             }
+        }
+
+        private void StartCountdown()
+        {
+            isCountingDown = true;
+            countdownTimer = 0f;
+            countdownValue = 3;
+
+            if (confirmButton != null) confirmButton.gameObject.SetActive(false);
+            if (cancelButton != null) cancelButton.gameObject.SetActive(false);
+
+            if (savePromptText != null)
+                savePromptText.text = "Saved!  3";
         }
 
         public void CancelSave()
         {
+            if (isCountingDown) return;
             CloseSavePrompt();
         }
 
         private void CloseSavePrompt()
         {
             isOpen = false;
+            isCountingDown = false;
+            currentSavePoint = null;
             if (savePanel != null)
                 savePanel.SetActive(false);
 
-            // Restore game
+            if (confirmButton != null) confirmButton.gameObject.SetActive(true);
+            if (cancelButton != null) cancelButton.gameObject.SetActive(true);
+
             Time.timeScale = 1f;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
