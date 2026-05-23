@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using PhotalFrame.Player;
 
 namespace PhotalFrame.Ghost
 {
@@ -13,7 +14,8 @@ namespace PhotalFrame.Ghost
         Disappearing, // Dematerializing: fading out to flank the player
         WindingUp,    // Pre-attack warning
         Lunging,      // Attack dash (Fatal Frame window)
-        Cooldown      // Recoiling from damage or hit
+        Cooldown,     // Recoiling from damage or hit
+        Paralyzed     // Frozen by special lens
     }
 
     public class GhostTarget : MonoBehaviour
@@ -63,6 +65,8 @@ namespace PhotalFrame.Ghost
         private float currentVisualAlpha = 0f;
         private Vector3 flankTargetPosition;
         private bool hasChosenFlankTarget = false;
+        private float paralyzedDuration = 3f;
+        private GhostState stateBeforeParalysis = GhostState.Chasing;
 
         public bool IsHostile => isHostile;
         public float CurrentHealth => health;
@@ -146,6 +150,9 @@ namespace PhotalFrame.Ghost
 
                 case GhostState.Cooldown:
                     ProcessCooldown();
+                    break;
+                case GhostState.Paralyzed:
+                    ProcessParalyzed();
                     break;
             }
 
@@ -281,9 +288,17 @@ namespace PhotalFrame.Ghost
             if (stateTimer >= lungeDuration)
             {
                 float finalDistance = Vector3.Distance(transform.position, playerTransform.position);
-                if (finalDistance <= 1.6f)
+                if (finalDistance <= 1.8f)
                 {
-                    Debug.Log("PLAYER HIT BY GHOST!");
+                    PlayerHealth playerHealth = playerTransform.GetComponent<PlayerHealth>();
+                    if (playerHealth != null)
+                    {
+                        playerHealth.TakeDamage(25f);
+                    }
+                    else
+                    {
+                        Debug.Log("PLAYER HIT BY GHOST!");
+                    }
                 }
                 TransitionToState(GhostState.Cooldown);
             }
@@ -308,6 +323,33 @@ namespace PhotalFrame.Ghost
                 // After cooldown, transition to Hidden state (Oculto) or Chasing
                 // Let's go to Chasing for dynamic loop, or Oculto for surprises
                 TransitionToState(GhostState.Chasing);
+            }
+        }
+
+        public void Paralyze(float duration)
+        {
+            if (health <= 0 || currentState == GhostState.Oculto) return;
+
+            paralyzedDuration = duration;
+            if (currentState != GhostState.Paralyzed)
+            {
+                stateBeforeParalysis = currentState;
+            }
+            TransitionToState(GhostState.Paralyzed);
+        }
+
+        private void ProcessParalyzed()
+        {
+            HoverInPlace();
+
+            if (stateTimer >= paralyzedDuration)
+            {
+                GhostState returnState = stateBeforeParalysis;
+                if (returnState == GhostState.Lunging || returnState == GhostState.WindingUp)
+                {
+                    returnState = GhostState.Chasing;
+                }
+                TransitionToState(returnState);
             }
         }
 
@@ -375,6 +417,10 @@ namespace PhotalFrame.Ghost
             {
                 targetVisualAlpha = 0.2f; // Fade out partially during recoil
             }
+            else if (currentState == GhostState.Paralyzed)
+            {
+                targetVisualAlpha = Mathf.Min(targetAlpha + 0.2f, 1.0f);
+            }
             else if (currentState == GhostState.Aparicao)
             {
                 // Smooth rise from 0 to targetAlpha
@@ -413,6 +459,11 @@ namespace PhotalFrame.Ghost
                     {
                         // Lerp emission strength based on visibility
                         Color emissionBase = new Color(0.08f, 0.25f, 0.5f);
+                        if (currentState == GhostState.Paralyzed)
+                        {
+                            float pulse = Mathf.PingPong(Time.time * 5f, 1f);
+                            emissionBase = Color.Lerp(new Color(0.1f, 0.45f, 0.6f), new Color(0.7f, 0.5f, 0.05f), pulse);
+                        }
                         r.material.SetColor("_EmissionColor", emissionBase * (alpha / targetAlpha));
                     }
                 }
@@ -518,6 +569,32 @@ namespace PhotalFrame.Ghost
             textMesh.alignment = TextAlignment.Center;
 
             StartCoroutine(DamageTextRoutine(textGo, textMesh, isFatalFrame));
+        }
+
+        public void SpawnSpiritPointsText(int points, string bonusString)
+        {
+            GameObject textGo = new GameObject("PointsText");
+            textGo.transform.position = transform.position + Vector3.up * 1.7f + UnityEngine.Random.insideUnitSphere * 0.15f;
+            textGo.transform.localScale = new Vector3(0.12f, 0.12f, 0.12f);
+
+            TextMesh textMesh = textGo.AddComponent<TextMesh>();
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.fontSize = 40;
+            textMesh.color = new Color(0.2f, 0.9f, 1.0f); // Bright cyan
+
+            if (!string.IsNullOrEmpty(bonusString))
+            {
+                textMesh.text = $"{bonusString}\n+{points} pts";
+                textMesh.fontSize = 44;
+                textMesh.color = new Color(0.95f, 0.8f, 0.1f); // Gold
+            }
+            else
+            {
+                textMesh.text = $"+{points} pts";
+            }
+
+            StartCoroutine(DamageTextRoutine(textGo, textMesh, !string.IsNullOrEmpty(bonusString)));
         }
 
         private IEnumerator DamageTextRoutine(GameObject obj, TextMesh mesh, bool isFatalFrame)

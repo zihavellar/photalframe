@@ -15,6 +15,8 @@ namespace PhotalFrame.Camera
         [Header("References")]
         [SerializeField] private PlayerController playerController;
         [SerializeField] private InputReader inputReader;
+        [SerializeField] private PlayerInventory playerInventory;
+        [SerializeField] private PlayerUpgrades playerUpgrades;
 
         [Header("Camera Obscura Properties")]
         [SerializeField] private float baseDamage = 35f;
@@ -25,7 +27,7 @@ namespace PhotalFrame.Camera
         [Header("Audio Settings")]
         [SerializeField] private AudioClip shutterSound;
         [SerializeField] private AudioClip rechargeCompleteSound;
-        [SerializeField] private AudioClip fatalFrameHitSound; // Sound played on successful Fatal Frame timing
+        [SerializeField] private AudioClip fatalFrameHitSound;
 
         private UnityEngine.Camera cam;
         private AudioSource audioSource;
@@ -37,7 +39,7 @@ namespace PhotalFrame.Camera
 
         // Events for UI and visual feedbacks
         public event Action OnPhotoTaken;
-        public event Action OnFatalFrameHit; // Triggers extra impact flash in UI
+        public event Action OnFatalFrameHit;
         public event Action OnRechargeComplete;
 
         public float CooldownTimer => cooldownTimer;
@@ -61,6 +63,12 @@ namespace PhotalFrame.Camera
 
             if (inputReader == null)
                 inputReader = FindAnyObjectByType<InputReader>();
+
+            if (playerInventory == null && playerController != null)
+                playerInventory = playerController.GetComponent<PlayerInventory>();
+
+            if (playerUpgrades == null && playerController != null)
+                playerUpgrades = playerController.GetComponent<PlayerUpgrades>();
         }
 
         private void Update()
@@ -88,6 +96,7 @@ namespace PhotalFrame.Camera
             {
                 ScanForGhosts();
                 HandleShooting();
+                HandleSpecialLens();
             }
             else
             {
@@ -108,6 +117,10 @@ namespace PhotalFrame.Camera
             {
                 if (ghost == null) continue;
 
+                // Skip invisible or hidden ghosts
+                if (ghost.CurrentState == GhostState.Oculto || ghost.CurrentState == GhostState.Disappearing)
+                    continue;
+
                 // 1. Check if ghost is inside the viewport frustum
                 Vector3 viewportPos = cam.WorldToViewportPoint(ghost.transform.position);
 
@@ -125,7 +138,13 @@ namespace PhotalFrame.Camera
                         Vector3 dirToGhost = ghost.transform.position - transform.position;
                         float distToGhost = dirToGhost.magnitude;
 
-                        if (distToGhost <= maxCaptureDistance)
+                        float activeMaxDistance = maxCaptureDistance;
+                        if (playerUpgrades != null)
+                        {
+                            activeMaxDistance *= playerUpgrades.GetRangeMultiplier();
+                        }
+
+                        if (distToGhost <= activeMaxDistance)
                         {
                             RaycastHit hit;
                             int layerMask = ~LayerMask.GetMask("Player");
@@ -162,8 +181,21 @@ namespace PhotalFrame.Camera
 
         private void CapturePhoto()
         {
-            // Start recharge cooldown
-            cooldownTimer = shutterCooldown;
+            // Read active film type and consume it
+            FilmType filmUsed = FilmType.Type14;
+            if (playerInventory != null)
+            {
+                filmUsed = playerInventory.ActiveFilm;
+                playerInventory.ConsumeFilm(); // Deduct one, auto-switch to infinite Type-14 if empty
+            }
+
+            // Start recharge cooldown (scaled by upgrade)
+            float activeCooldown = shutterCooldown;
+            if (playerUpgrades != null)
+            {
+                activeCooldown *= playerUpgrades.GetReloadMultiplier();
+            }
+            cooldownTimer = activeCooldown;
             wasReady = false;
 
             // Trigger visual flash event
@@ -185,20 +217,79 @@ namespace PhotalFrame.Camera
                 
                 // 1. Distance multiplier (closer = more damage)
                 float currentDistance = Vector3.Distance(transform.position, currentTargetInReticle.transform.position);
-                float distanceFactor = Mathf.Clamp01(1f - (currentDistance / maxCaptureDistance));
+                float activeMaxDistance = maxCaptureDistance;
+                if (playerUpgrades != null)
+                {
+                    activeMaxDistance *= playerUpgrades.GetRangeMultiplier();
+                }
+                float distanceFactor = Mathf.Clamp01(1f - (currentDistance / activeMaxDistance));
                 
                 // 2. Centralization multiplier (closer to center = more damage)
                 Vector2 viewportXY = new Vector2(targetViewportPosition.x, targetViewportPosition.y);
                 float distFromCenter = Vector2.Distance(viewportXY, new Vector2(0.5f, 0.5f));
                 float centerFactor = Mathf.Clamp01(1f - (distFromCenter / reticleRadius));
 
-                // Formula: base * (30% to 100% based on distance) * (50% to 100% based on centering)
+                // 3. Film multiplier
+                float filmMultiplier = 1f;
+                if (filmUsed == FilmType.Type61) filmMultiplier = 1.7f;
+                else if (filmUsed == FilmType.Type90) filmMultiplier = 2.8f;
+
+                // Formula: base * (30% to 100% based on distance) * (50% to 100% based on centering) * filmMultiplier
                 float distanceMultiplier = Mathf.Lerp(0.3f, 1.0f, distanceFactor);
                 float centerMultiplier = Mathf.Lerp(0.5f, 1.0f, centerFactor);
-                float finalDamage = baseDamage * distanceMultiplier * centerMultiplier;
+                float finalDamage = baseDamage * distanceMultiplier * centerMultiplier * filmMultiplier;
+                
+                if (playerUpgrades != null)
+                {
+                    finalDamage *= playerUpgrades.GetPowerMultiplier();
+                }
 
                 // Deliver damage to ghost and let it know if it was a Fatal Frame hit
                 currentTargetInReticle.TakeDamage(finalDamage, isFatalFrame);
+
+                // --- SPIRIT POINTS CALCULATION ---
+                int basePts = 100;
+                int proximityPts = Mathf.RoundToInt(100f * distanceFactor);
+                int centeringPts = Mathf.RoundToInt(150f * centerFactor);
+                
+                float filmPointsMultiplier = 1.0f;
+                if (filmUsed == FilmType.Type61) filmPointsMultiplier = 1.5f;
+                else if (filmUsed == FilmType.Type90) filmPointsMultiplier = 2.0f;
+
+                int photoPoints = Mathf.RoundToInt((basePts + proximityPts + centeringPts) * filmPointsMultiplier);
+                
+                string bonusString = "";
+                // Check for Shot Types and accumulate bonuses
+                if (centerFactor > 0.85f)
+                {
+                    photoPoints += 200;
+                    bonusString = "Core Shot!";
+                }
+                if (distanceFactor > 0.8f)
+                {
+                    photoPoints += 300;
+                    bonusString = string.IsNullOrEmpty(bonusString) ? "Close Shot!" : "Core + Close Shot!";
+                }
+                if (isFatalFrame)
+                {
+                    photoPoints += 1000;
+                    bonusString = "FATAL FRAME!";
+                    
+                    // Recover 1 spirit orb on successful Fatal Frame
+                    if (playerUpgrades != null)
+                    {
+                        playerUpgrades.AddSpiritOrb();
+                    }
+                }
+
+                // Add points to upgrades tracker
+                if (playerUpgrades != null)
+                {
+                    playerUpgrades.AddPoints(photoPoints);
+                }
+
+                // Spawn points feedback on the ghost
+                currentTargetInReticle.SpawnSpiritPointsText(photoPoints, bonusString);
 
                 // Handle extra feedback on Fatal Frame hit
                 if (isFatalFrame)
@@ -219,9 +310,27 @@ namespace PhotalFrame.Camera
             Debug.Log("Photo captured!");
         }
 
-        /// <summary>
-        /// Coroutine to handle hitstop visual delay on time scale.
-        /// </summary>
+        private void HandleSpecialLens()
+        {
+            if (inputReader.ActivateSpecialLens && currentTargetInReticle != null && playerUpgrades != null)
+            {
+                if (playerUpgrades.ConsumeSpiritOrb())
+                {
+                    currentTargetInReticle.Paralyze(3.0f);
+                    // Play special sound effect (reuse hit sound for feedback)
+                    if (fatalFrameHitSound != null && audioSource != null)
+                    {
+                        audioSource.PlayOneShot(fatalFrameHitSound);
+                    }
+                    Debug.Log("SPECIAL LENS ACTIVATED: PARALYZE!");
+                }
+                else
+                {
+                    Debug.Log("No Spirit Orbs left to activate Special Lens!");
+                }
+            }
+        }
+
         private IEnumerator HitStopRoutine(float timeScaleAmount, float durationInRealtime)
         {
             float previousTimeScale = Time.timeScale;
@@ -229,7 +338,6 @@ namespace PhotalFrame.Camera
 
             yield return new WaitForSecondsRealtime(durationInRealtime);
 
-            // Restore normal time scale
             Time.timeScale = 1.0f;
         }
 
