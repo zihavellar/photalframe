@@ -97,16 +97,33 @@ namespace PhotalFrame.Camera
         }
 
         /// <summary>
-        /// Logic for third-person follow camera during exploration.
+        /// Logic for third-person follow camera during exploration, with obstacle avoidance.
         /// </summary>
         private void UpdateExplorationCamera()
         {
             Transform playerTransform = playerController.transform;
 
-            // Calculate target position and rotation in exploration mode
-            Vector3 targetPosition = playerTransform.position + playerTransform.rotation * explorationOffset;
-            
+            // 1. Calculate desired camera position and look target in world space
+            Vector3 desiredPosition = playerTransform.position + playerTransform.rotation * explorationOffset;
             Vector3 lookAtTarget = playerTransform.position + Vector3.up * lookAtHeightOffset;
+            
+            // 2. Obstacle Avoidance: cast a sphere from player pivot to desired camera position
+            Vector3 castDirection = desiredPosition - lookAtTarget;
+            float castDistance = castDirection.magnitude;
+            Vector3 targetPosition = desiredPosition;
+
+            RaycastHit hit;
+            // Ignore Player layer and trigger colliders to avoid camera clipping on triggers
+            int layerMask = ~LayerMask.GetMask("Player", "Ignore Raycast");
+            float cameraRadius = 0.22f;
+
+            if (Physics.SphereCast(lookAtTarget, cameraRadius, castDirection.normalized, out hit, castDistance, layerMask, QueryTriggerInteraction.Ignore))
+            {
+                // Place camera at collision point, offset slightly forward, minimum distance 0.4m
+                targetPosition = lookAtTarget + castDirection.normalized * Mathf.Max(0.4f, hit.distance - 0.15f);
+            }
+
+            // 3. Apply position and rotation
             Quaternion targetRotation = Quaternion.LookRotation(lookAtTarget - transform.position);
 
             if (transitionProgress < 1f)

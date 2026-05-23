@@ -12,11 +12,13 @@ namespace PhotalFrame.Input
         public Vector2 Look { get; private set; }
         public bool Sprint { get; private set; }
         public bool ToggleViewfinder { get; private set; }
+        public bool Attack { get; private set; }
 
         private InputAction moveAction;
         private InputAction lookAction;
         private InputAction sprintAction;
         private InputAction toggleViewfinderAction;
+        private InputAction attackAction;
 
         private void Awake()
         {
@@ -29,6 +31,7 @@ namespace PhotalFrame.Input
                     lookAction = playerMap.FindAction("Look");
                     sprintAction = playerMap.FindAction("Sprint");
                     toggleViewfinderAction = playerMap.FindAction("ToggleViewfinder");
+                    attackAction = playerMap.FindAction("Attack");
                 }
                 else
                 {
@@ -47,6 +50,7 @@ namespace PhotalFrame.Input
             lookAction?.Enable();
             sprintAction?.Enable();
             toggleViewfinderAction?.Enable();
+            attackAction?.Enable();
         }
 
         private void OnDisable()
@@ -55,6 +59,7 @@ namespace PhotalFrame.Input
             lookAction?.Disable();
             sprintAction?.Disable();
             toggleViewfinderAction?.Disable();
+            attackAction?.Disable();
         }
 
         private void Update()
@@ -75,6 +80,19 @@ namespace PhotalFrame.Input
                 bool mouseRight = Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame;
                 bool gamepadTrigger = Gamepad.current != null && Gamepad.current.leftTrigger.wasPressedThisFrame;
                 ToggleViewfinder = mouseRight || gamepadTrigger;
+            }
+
+            // Handle Attack (Photo Capture) input
+            if (attackAction != null)
+            {
+                Attack = attackAction.WasPressedThisFrame();
+            }
+            else
+            {
+                // Fallback direct polling: Left Click on Mouse or Button West (X on Xbox, Square on PS) on Gamepad
+                bool mouseLeft = Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+                bool gamepadWest = Gamepad.current != null && Gamepad.current.buttonWest.wasPressedThisFrame;
+                Attack = mouseLeft || gamepadWest;
             }
         }
     }
